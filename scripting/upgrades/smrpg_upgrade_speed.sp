@@ -101,9 +101,7 @@ public MRESReturn Hook_GetPlayerMaxSpeedPost(int client, Handle hReturn)
 		return MRES_Ignored;
 	
 	// Upgrade enabled?
-	int upgrade[UpgradeInfo];
-	SMRPG_GetUpgradeInfo(UPGRADE_SHORTNAME, upgrade);
-	if(!upgrade[UI_enabled])
+	if(!SMRPG_IsUpgradeEnabled(UPGRADE_SHORTNAME))
 		return MRES_Ignored;
 	
 	int iLevel = SMRPG_GetClientUpgradeLevel(client, UPGRADE_SHORTNAME);

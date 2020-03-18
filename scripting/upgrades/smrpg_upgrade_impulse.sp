@@ -18,11 +18,11 @@ ConVar g_hCVDefaultDuration;
 
 StringMap g_hWeaponConfig;
 
-enum WeaponConfig
+enum struct WeaponConfig
 {
-	Float:Config_SpeedIncrease,
-	Float:Config_Duration
-};
+	float speedIncrease;
+	float duration;
+}
 
 int g_iImpulseTrailSprites[MAXPLAYERS+1] = {-1,...};
 
@@ -163,9 +163,7 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if(!SMRPG_IsEnabled())
 		return;
 	
-	int upgrade[UpgradeInfo];
-	SMRPG_GetUpgradeInfo(UPGRADE_SHORTNAME, upgrade);
-	if(!upgrade[UI_enabled])
+	if(!SMRPG_IsUpgradeEnabled(UPGRADE_SHORTNAME))
 		return;
 	
 	// Are bots allowed to use this upgrade?
@@ -262,16 +260,16 @@ bool LoadWeaponConfig()
 	}
 	
 	char sWeapon[64];
-	int config[WeaponConfig];
+	WeaponConfig config;
 	if(hKV.GotoFirstSubKey(false))
 	{
 		do
 		{
 			hKV.GetSectionName(sWeapon, sizeof(sWeapon));
-			config[Config_SpeedIncrease] = hKV.GetFloat("speed_increase", -1.0);
-			config[Config_Duration] = hKV.GetFloat("duration", -1.0);
+			config.speedIncrease = hKV.GetFloat("speed_increase", -1.0);
+			config.duration = hKV.GetFloat("duration", -1.0);
 			
-			g_hWeaponConfig.SetArray(sWeapon, config[0], view_as<int>(WeaponConfig));
+			g_hWeaponConfig.SetArray(sWeapon, config, sizeof(WeaponConfig));
 			
 		} while (hKV.GotoNextKey());
 	}
@@ -282,11 +280,11 @@ bool LoadWeaponConfig()
 float GetWeaponSpeedIncrease(const char[] sWeapon)
 {
 	// See if there is a value for this weapon in the config.
-	int config[WeaponConfig];
-	if (g_hWeaponConfig.GetArray(sWeapon, config[0], view_as<int>(WeaponConfig)))
+	WeaponConfig config;
+	if (g_hWeaponConfig.GetArray(sWeapon, config, sizeof(WeaponConfig)))
 	{
-		if (config[Config_SpeedIncrease] >= 0.0)
-			return config[Config_SpeedIncrease];
+		if (config.speedIncrease >= 0.0)
+			return config.speedIncrease;
 	}
 	
 	// Just use the default value
@@ -296,11 +294,11 @@ float GetWeaponSpeedIncrease(const char[] sWeapon)
 float GetWeaponEffectDuration(const char[] sWeapon)
 {
 	// See if there is a value for this weapon in the config.
-	int config[WeaponConfig];
-	if (g_hWeaponConfig.GetArray(sWeapon, config[0], view_as<int>(WeaponConfig)))
+	WeaponConfig config;
+	if (g_hWeaponConfig.GetArray(sWeapon, config, sizeof(WeaponConfig)))
 	{
-		if (config[Config_Duration] >= 0.0)
-			return config[Config_Duration];
+		if (config.duration >= 0.0)
+			return config.duration;
 	}
 	
 	// Just use the default value

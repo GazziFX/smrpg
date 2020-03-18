@@ -7,14 +7,14 @@ Handle g_hfwdOnClientLaggedMovementChange;
 Handle g_hfwdOnClientLaggedMovementChanged;
 Handle g_hfwdOnClientLaggedMovementReset;
 
-enum MovementState {
-	Float:MS_slower,
-	Float:MS_faster,
-	Handle:MS_lastSlowPlugin,
-	Handle:MS_lastFastPlugin
-};
+enum struct MovementState {
+	float slower;
+	float faster;
+	Handle lastSlowPlugin;
+	Handle lastFastPlugin;
+}
 
-int g_ClientMovementState[MAXPLAYERS+1][MovementState];
+MovementState g_ClientMovementState[MAXPLAYERS+1];
 Handle g_hSlowRestoreTimer[MAXPLAYERS+1];
 Handle g_hFastRestoreTimer[MAXPLAYERS+1];
 
@@ -42,18 +42,18 @@ void ResetLaggedMovementClient(int client)
 {
 	if(IsClientInGame(client))
 	{
-		if(g_ClientMovementState[client][MS_faster] > 0.0)
+		if(g_ClientMovementState[client].faster > 0.0)
 			ResetSpeedUp(client);
-		if(g_ClientMovementState[client][MS_slower] > 0.0)
+		if(g_ClientMovementState[client].slower > 0.0)
 			ResetSlowDown(client);
 	}
 	ClearHandle(g_hFastRestoreTimer[client]);
 	ClearHandle(g_hSlowRestoreTimer[client]);
 	
-	g_ClientMovementState[client][MS_slower] = 0.0;
-	g_ClientMovementState[client][MS_faster] = 0.0;
-	g_ClientMovementState[client][MS_lastSlowPlugin] = null;
-	g_ClientMovementState[client][MS_lastFastPlugin] = null;
+	g_ClientMovementState[client].slower = 0.0;
+	g_ClientMovementState[client].faster = 0.0;
+	g_ClientMovementState[client].lastSlowPlugin = null;
+	g_ClientMovementState[client].lastFastPlugin = null;
 }
 
 /**
@@ -127,15 +127,15 @@ public int Native_ChangeClientLaggedMovement(Handle plugin, int numParams)
 			return false;
 		
 		// Already slower? Ignore this effect.
-		if(g_ClientMovementState[client][MS_slower] >= fSlowdown)
+		if(g_ClientMovementState[client].slower >= fSlowdown)
 			return false;
 		
 		// Are you insane?
 		if(fTime <= 0.0)
 			return ThrowNativeError(SP_ERROR_NATIVE, "Invalid effect time %f.", fTime);
 		
-		g_ClientMovementState[client][MS_slower] = fSlowdown;
-		g_ClientMovementState[client][MS_lastSlowPlugin] = plugin;
+		g_ClientMovementState[client].slower = fSlowdown;
+		g_ClientMovementState[client].lastSlowPlugin = plugin;
 		
 		// Do the correct new speed.
 		ApplyLaggedMovementValue(client);
@@ -167,15 +167,15 @@ public int Native_ChangeClientLaggedMovement(Handle plugin, int numParams)
 			return false;
 		
 		// Already faster? Ignore this effect.
-		if(g_ClientMovementState[client][MS_faster] >= fSpeedup)
+		if(g_ClientMovementState[client].faster >= fSpeedup)
 			return false;
 		
 		// Are you insane?
 		if(fTime <= 0.0)
 			return ThrowNativeError(SP_ERROR_NATIVE, "Invalid effect time %f.", fTime);
 		
-		g_ClientMovementState[client][MS_faster] = fSpeedup;
-		g_ClientMovementState[client][MS_lastFastPlugin] = plugin;
+		g_ClientMovementState[client].faster = fSpeedup;
+		g_ClientMovementState[client].lastFastPlugin = plugin;
 		
 		// Do the correct new speed.
 		ApplyLaggedMovementValue(client);
@@ -211,30 +211,30 @@ public int Native_ResetClientLaggedMovement(Handle plugin, int numParams)
 		case LMT_Slower:
 		{
 			// Player is not slowed down?
-			if(g_ClientMovementState[client][MS_slower] == 0.0)
+			if(g_ClientMovementState[client].slower == 0.0)
 				return false;
 			
 			// Slowed down by some other plugin.
-			if(g_ClientMovementState[client][MS_lastSlowPlugin] != plugin && !bForce)
+			if(g_ClientMovementState[client].lastSlowPlugin != plugin && !bForce)
 				return false;
 			
 			// Reset the speed.
-			g_ClientMovementState[client][MS_slower] = 0.0;
-			g_ClientMovementState[client][MS_lastSlowPlugin] = null;
+			g_ClientMovementState[client].slower = 0.0;
+			g_ClientMovementState[client].lastSlowPlugin = null;
 		}
 		case LMT_Faster:
 		{
 			// Player is not sped up?
-			if(g_ClientMovementState[client][MS_faster] == 0.0)
+			if(g_ClientMovementState[client].faster == 0.0)
 				return false;
 			
 			// Sped up by some other plugin.
-			if(g_ClientMovementState[client][MS_lastFastPlugin] != plugin && !bForce)
+			if(g_ClientMovementState[client].lastFastPlugin != plugin && !bForce)
 				return false;
 			
 			// Reset the speed.
-			g_ClientMovementState[client][MS_faster] = 0.0;
-			g_ClientMovementState[client][MS_lastFastPlugin] = null;
+			g_ClientMovementState[client].faster = 0.0;
+			g_ClientMovementState[client].lastFastPlugin = null;
 		}
 		default:
 		{
@@ -263,21 +263,21 @@ public int Native_IsClientLaggedMovementChanged(Handle plugin, int numParams)
 		case LMT_Slower:
 		{
 			// Player is not slowed down?
-			if(g_ClientMovementState[client][MS_slower] == 0.0)
+			if(g_ClientMovementState[client].slower == 0.0)
 				return false;
 			
 			// Slowed down by some other plugin.
-			if(g_ClientMovementState[client][MS_lastSlowPlugin] != plugin && bByMe)
+			if(g_ClientMovementState[client].lastSlowPlugin != plugin && bByMe)
 				return false;
 		}
 		case LMT_Faster:
 		{
 			// Player is not sped up?
-			if(g_ClientMovementState[client][MS_faster] == 0.0)
+			if(g_ClientMovementState[client].faster == 0.0)
 				return false;
 			
 			// Sped up by some other plugin.
-			if(g_ClientMovementState[client][MS_lastFastPlugin] != plugin && bByMe)
+			if(g_ClientMovementState[client].lastFastPlugin != plugin && bByMe)
 				return false;
 		}
 		default:
@@ -294,8 +294,8 @@ public int Native_IsClientLaggedMovementChanged(Handle plugin, int numParams)
  */
 stock void ApplyLaggedMovementValue(int client)
 {
-	float fSlow = g_ClientMovementState[client][MS_slower];
-	float fFast = g_ClientMovementState[client][MS_faster];
+	float fSlow = g_ClientMovementState[client].slower;
+	float fFast = g_ClientMovementState[client].faster;
 	
 	float fValue = (1.0 - fSlow) + fFast;
 	SetEntPropFloat(client, Prop_Send, "m_flLaggedMovementValue", fValue);
@@ -304,8 +304,8 @@ stock void ApplyLaggedMovementValue(int client)
 void ResetSlowDown(int client)
 {
 	// Reset the effect
-	g_ClientMovementState[client][MS_slower] = 0.0;
-	g_ClientMovementState[client][MS_lastSlowPlugin] = null;
+	g_ClientMovementState[client].slower = 0.0;
+	g_ClientMovementState[client].lastSlowPlugin = null;
 	
 	ApplyLaggedMovementValue(client);
 	
@@ -318,8 +318,8 @@ void ResetSlowDown(int client)
 void ResetSpeedUp(int client)
 {
 	// Reset the effect
-	g_ClientMovementState[client][MS_faster] = 0.0;
-	g_ClientMovementState[client][MS_lastFastPlugin] = null;
+	g_ClientMovementState[client].faster = 0.0;
+	g_ClientMovementState[client].lastFastPlugin = null;
 	
 	ApplyLaggedMovementValue(client);
 	

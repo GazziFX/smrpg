@@ -12,19 +12,19 @@
 #include <smrpg_health>
 #include <smrpg_effects>
 
-#define UPGRADE_SHORTNAME "vamp"
+#define UPGRADE_SHORTNAME "return"
 
 ConVar g_hCVPercent;
 ConVar g_hCVMax;
-ConVar g_hCVFreezePenalty;
+// ConVar g_hCVFreezePenalty;
 
-int g_iBeamColor[] = {0,255,0,255}; // green
+int g_iBeamColor[] = {255,0,0,225}; // red
 
 public Plugin myinfo = 
 {
-	name = "SM:RPG Upgrade > Vampire",
-	author = "Jannik \"Peace-Maker\" Hartung",
-	description = "Vampire upgrade for SM:RPG. Steal HP from players when damaging them.",
+	name = "SM:RPG Upgrade > Return",
+	author = "Pham Chi Long",
+	description = "Return dame upgrade for SM:RPG. Return back dame deal on you to attacker",
 	version = SMRPG_VERSION,
 	url = "http://www.wcfan.de/"
 }
@@ -59,13 +59,13 @@ public void OnLibraryAdded(const char[] name)
 	// Register this upgrade in SM:RPG
 	if(StrEqual(name, "smrpg"))
 	{
-		SMRPG_RegisterUpgradeType("Vampire", UPGRADE_SHORTNAME, "Steal HP from players when damaging them.", 0, true, 10, 15, 10);
+		SMRPG_RegisterUpgradeType("Return", UPGRADE_SHORTNAME, "Return back dame deal on you to attacker.", 0, true, 10, 15, 10);
 		SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
 		SMRPG_SetUpgradeDefaultCosmeticEffect(UPGRADE_SHORTNAME, SMRPG_FX_Visuals, true);
 		
-		g_hCVPercent = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_vamp_percent", "0.075", "Percent of damage to convert to attacker's health for each level.", 0, true, 0.001);
-		g_hCVMax = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_vamp_maxhp", "70", "Maximum HP the attacker can get at a time. (0 = unlimited)", 0, true, 0.0);
-		g_hCVFreezePenalty = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_vamp_freeze_penalty", "0.5", "Only give x% of the HP the attacker would receive, if the victim is frozen by e.g. icestab.", 0, true, 0.0);
+		g_hCVPercent = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_return_percent", "0.075", "Percent of damage to convert to attacker's health for each level.", 0, true, 0.001);
+		g_hCVMax = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_return_maxdame", "99", "Maximum HP the attacker can get at a time. (0 = unlimited)", 0, true, 0.0);
+		// g_hCVFreezePenalty = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_vamp_freeze_penalty", "0.5", "Only give x% of the HP the attacker would receive, if the victim is frozen by e.g. icestab.", 0, true, 0.0);
 	}
 }
 
@@ -119,15 +119,15 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if(!SMRPG_IsFFAEnabled() && GetClientTeam(attacker) == GetClientTeam(victim))
 		return;
 	
-	int iLevel = SMRPG_GetClientUpgradeLevel(attacker, UPGRADE_SHORTNAME);
+	int iLevel = SMRPG_GetClientUpgradeLevel(victim, UPGRADE_SHORTNAME);
 	if(iLevel <= 0)
 		return;
 	
 	int iOldHealth = GetClientHealth(attacker);
-	int iMaxHealth = SMRPG_Health_GetClientMaxHealth(attacker);
+	//int iMaxHealth = SMRPG_Health_GetClientMaxHealth(attacker);
 		
 	// Don't reset the health, if the player gained more by other means.
-	if(iOldHealth >= iMaxHealth)
+	if(iOldHealth < 1)
 		return;
 	
 	if(!SMRPG_RunUpgradeEffect(attacker, UPGRADE_SHORTNAME))
@@ -138,32 +138,23 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	if (StrEqual(sClassname, "entityflame", false)) {
 		return;
 	}
-	
-	float fIncrease = float(iLevel) * g_hCVPercent.FloatValue;
-	fIncrease *= damage;
-	fIncrease += 0.5;
-	
-	// Reduce stolen HP if the victim is frozen with icestab
-	if(GetFeatureStatus(FeatureType_Native, "SMRPG_IsClientFrozen") == FeatureStatus_Available && SMRPG_IsClientFrozen(victim))
-	{
-		fIncrease *= g_hCVFreezePenalty.FloatValue;
+	float fReturnDame = float(iLevel) * g_hCVPercent.FloatValue;
+	fReturnDame *= damage;
+	int lostHP = RoundToFloor(fReturnDame);
+	if (lostHP > g_hCVMax.IntValue) {
+		lostHP = g_hCVMax.IntValue;
 	}
 	
-	// Don't let the attacker steal more hp than the set max 
-	int iMaxIncrease = g_hCVMax.IntValue;
-	int iIncrease = RoundToFloor(fIncrease);
-	if(iMaxIncrease > 0 && iIncrease > iMaxIncrease)
-		iIncrease = iMaxIncrease;
-	
-	int iNewHealth = iOldHealth + iIncrease;
-	// Limit health gain to maxhealth
-	if(iNewHealth > iMaxHealth)
-		iNewHealth = iMaxHealth;
-	
 	// Only change anything and display the effect, if we actually gave some health.
-	if(iOldHealth != iMaxHealth)
+	if(IsPlayerAlive(attacker))
 	{
-		SetEntityHealth(attacker, iNewHealth);
+		int iNewHealth = iOldHealth - lostHP;
+		if (iNewHealth < 1) {
+			SDKHooks_TakeDamage(attacker, victim, victim, 100.0, DMG_PREVENT_PHYSICS_FORCE|DMG_CRUSH|DMG_ALWAYSGIB);
+			return;
+		} else {
+			SetEntityHealth(attacker, iNewHealth);
+		}
 		
 		float fAttackerOrigin[3], fVictimOrigin[3];
 		GetClientEyePosition(attacker, fAttackerOrigin);
@@ -179,7 +170,7 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 		
 		if(iBeamSprite != -1)
 		{
-			TE_SetupBeamPoints(fAttackerOrigin, fVictimOrigin, iBeamSprite, iHaloSprite, 0, 66, 0.2, 1.0, 20.0, 1, 0.0, g_iBeamColor, 5);
+			TE_SetupBeamPoints(fVictimOrigin, fAttackerOrigin , iBeamSprite, iHaloSprite, 0, 66, 0.1, 1.0, 20.0, 1, 0.0, g_iBeamColor, 5);
 			SMRPG_TE_SendToAllEnabled(UPGRADE_SHORTNAME);
 		}
 	}

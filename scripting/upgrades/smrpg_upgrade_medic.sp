@@ -165,6 +165,7 @@ public Action Timer_ApplyMedic(Handle timer, any data)
 		iHaloSprite = iBeamSprite;
 	
 	int iLevel, iNewHP, iMaxHealth, iNewArmor, iMaxArmor;
+	
 	float fMedicRadius, vRingOrigin[3];
 	for(int i=1;i<=MaxClients;i++)
 	{
@@ -185,6 +186,8 @@ public Action Timer_ApplyMedic(Handle timer, any data)
 		fMedicRadius = fMedicRadiusBase + fMedicRadiusIncrease * float(iLevel-1);
 		
 		/* Medic found, now search for teammates */
+		int medicMaxHealth = SMRPG_Health_GetClientMaxHealth(i);
+		int medicCurentHealth = GetClientHealth(i);
 		for(int m=1;m<=MaxClients;m++)
 		{
 			/* If player is on the same team as medic, player is not dead,
@@ -213,12 +216,18 @@ public Action Timer_ApplyMedic(Handle timer, any data)
 			/* If player is not at maximum health, heal him */
 			if(iNewHP < iMaxHealth)
 			{
-				iNewHP += iLevel * iMedicIncrease;
+				int heal = iLevel * iMedicIncrease;
+				iNewHP += heal;
 				
 				if(iNewHP > iMaxHealth)
 					iNewHP = iMaxHealth;
 				
 				SetEntityHealth(m, iNewHP);
+				medicCurentHealth += heal/2;
+				if(medicCurentHealth > medicMaxHealth)
+					medicCurentHealth = medicMaxHealth;
+				
+				SetEntityHealth(i, medicCurentHealth);
 				
 				iBeamRingColor = MEDIC_HEALTH_BEAM_COLOR;
 				

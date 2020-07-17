@@ -171,6 +171,10 @@ public void Hook_OnTakeDamagePost(int victim, int attacker, int inflictor, float
 	// Ignore team attack if not FFA
 	if(!SMRPG_IsFFAEnabled() && GetClientTeam(attacker) == GetClientTeam(victim))
 		return;
+
+	if(SMRPG_IsUpgradeActiveOnClient(victim, "firepistol")) {
+		return;
+	}
 	
 	int iLevel = SMRPG_GetClientUpgradeLevel(attacker, UPGRADE_SHORTNAME);
 	if(iLevel <= 0)

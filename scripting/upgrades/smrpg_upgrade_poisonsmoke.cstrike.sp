@@ -15,9 +15,7 @@
 enum GrenadeInfo {
 	GR_userid,
 	GR_team,
-	GR_projectile,
 	GR_particle,
-	GR_light,
 	Handle:GR_removeTimer,
 	Handle:GR_damageTimer,
 };
@@ -28,8 +26,6 @@ ConVar g_hCVFriendlyFire;
 ConVar g_hCVIgnoreFriendlyFire;
 ConVar g_hCVBaseDamage;
 ConVar g_hCVIncDamage;
-ConVar g_hCVColorT;
-ConVar g_hCVColorCT;
 ConVar g_hCVInterval;
 
 bool g_bInCheckDamage;
@@ -65,6 +61,8 @@ public void OnPluginStart()
 	
 	HookEvent("round_start", Event_OnResetSmokes);
 	HookEvent("round_end", Event_OnResetSmokes);
+	// Hook events
+	HookEvent("smokegrenade_detonate", smokegrenade_detonate);
 	
 	g_hCVFriendlyFire = FindConVar("mp_friendlyfire");
 }
@@ -97,8 +95,6 @@ public void OnLibraryAdded(const char[] name)
 		g_hCVIgnoreFriendlyFire = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_ignoreff", "0", "Ignore the setting of mp_friendlyfire and don't allow team damage by poison smoke at all?", _, true, 0.0, true, 1.0);
 		g_hCVBaseDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_basedamage", "3", "The minimum damage the poison smoke inflicts.", _, true, 0.0);
 		g_hCVIncDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_incdamage", "2", "How much damage multiplied by the upgrade level should we add to the base damage?", _, true, 1.0);
-		g_hCVColorT = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_color_t", "20 250 50", "What color should the smoke be for grenades thrown by terrorists? Format: \"red green blue\" from 0 - 255.");
-		g_hCVColorCT = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_color_ct", "20 250 50", "What color should the smoke be for grenades thrown by counter-terrorists? Format: \"red green blue\" from 0 - 255.");
 		g_hCVInterval = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_damage_interval", "1", "Deal damage every x seconds.", _, true, 0.1);
 	}
 }
@@ -127,7 +123,7 @@ public Action Event_OnPlayerDeath(Event event, const char[] name, bool dontBroad
 public void Event_OnResetSmokes(Event event, const char[] name, bool dontBroadcast)
 {
 	int iSize = g_hThrownGrenades.Length;
-	int iGrenade[GrenadeInfo], iLight;
+	int iGrenade[GrenadeInfo];
 	for(int i=0;i<iSize;i++)
 	{
 		g_hThrownGrenades.GetArray(i, iGrenade[0], view_as<int>(GrenadeInfo));
@@ -137,14 +133,6 @@ public void Event_OnResetSmokes(Event event, const char[] name, bool dontBroadca
 		if(!g_bInCheckDamage && iGrenade[GR_damageTimer] != null)
 		{
 			delete iGrenade[GR_damageTimer];
-		}
-		
-		// Keep the color on round end and only remove it on round start.
-		if(StrEqual(name, "round_start"))
-		{
-			iLight = EntRefToEntIndex(iGrenade[GR_light]);
-			if(iLight != INVALID_ENT_REFERENCE && IsValidEntity(iLight))
-				AcceptEntityInput(iLight, "Kill");
 		}
 	}
 	g_hThrownGrenades.Clear();
@@ -171,24 +159,23 @@ public void SMRPG_TranslateUpgrade(int client, const char[] shortname, Translati
 	}
 }
 
-public void OnEntityCreated(int entity, const char[] classname)
-{
-	if(StrEqual(classname, "smokegrenade_projectile", false))
-	{
-		SDKHook(entity, SDKHook_Spawn, Hook_OnSpawnProjectile);
-	}
+// public void OnEntityCreated(int entity, const char[] classname)
+// {
+// 	if(StrEqual(classname, "smokegrenade_projectile", false))
+// 	{
+// 		SDKHook(entity, SDKHook_Spawn, Hook_OnSpawnProjectile);
+// 	}
 	
-	// CS:S doesn't use the EffectDispatch ParticleEffect route, but creates such an entity instead.
-	if(StrEqual(classname, "env_particlesmokegrenade", false))
-	{
-		SDKHook(entity, SDKHook_Spawn, Hook_OnSpawnParticles);
-	}
-}
+// 	// CS:S doesn't use the EffectDispatch ParticleEffect route, but creates such an entity instead.
+// 	if(StrEqual(classname, "env_particlesmokegrenade", false))
+// 	{
+// 		SDKHook(entity, SDKHook_Spawn, Hook_OnSpawnParticles);
+// 	}
+// }
 
-public void Hook_OnSpawnProjectile(int entity)
+public void smokegrenade_detonate(Handle event, const char[] name, bool dontBroadcast)
 {
-	int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-	
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 	if(client == INVALID_ENT_REFERENCE || !IsClientInGame(client))
 		return;
 	
@@ -198,74 +185,45 @@ public void Hook_OnSpawnProjectile(int entity)
 	int iGrenade[GrenadeInfo];
 	iGrenade[GR_userid] = GetClientUserId(client);
 	iGrenade[GR_team] = GetClientTeam(client);
-	iGrenade[GR_projectile] = EntIndexToEntRef(entity);
 	iGrenade[GR_particle] = INVALID_ENT_REFERENCE;
-	iGrenade[GR_light] = INVALID_ENT_REFERENCE;
 	iGrenade[GR_removeTimer] = null;
 	iGrenade[GR_damageTimer] = null;
-	g_hThrownGrenades.PushArray(iGrenade[0], view_as<int>(GrenadeInfo));
-}
 
-// CS:S only!
-public void Hook_OnSpawnParticles(int entity)
-{
-	float fParticleOrigin[3], fProjectileOrigin[3];
-	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", fParticleOrigin);
+	// Get coordinates of this event
+	float a[3], b[3];
+	a[0] = GetEventFloat(event, "x");
+	a[1] = GetEventFloat(event, "y");
+	a[2] = GetEventFloat(event, "z");
 	
-	int iSize = g_hThrownGrenades.Length;
-	int iGrenade[GrenadeInfo], iProjectile;
-	for(int i=0;i<iSize;i++)
+	int checkok = 0;
+	int ent = -1;
+	
+	// List all entitys by classname
+	while((ent = FindEntityByClassname(ent, "env_particlesmokegrenade")) != -1)
 	{
-		g_hThrownGrenades.GetArray(i, iGrenade[0], view_as<int>(GrenadeInfo));
-		iProjectile = EntRefToEntIndex(iGrenade[GR_projectile]); // TODO: check for valid entity and remove entry, if light wasn't spawned already.
-		GetEntPropVector(iProjectile, Prop_Send, "m_vecOrigin", fProjectileOrigin);
+		// Get entity coordinates
+		GetEntPropVector(ent, Prop_Send, "m_vecOrigin", b);
 		
-		// This is the grenade we're looking for.
-		if(fParticleOrigin[0] == fProjectileOrigin[0] && fParticleOrigin[1] == fProjectileOrigin[1] && fParticleOrigin[2] == fProjectileOrigin[2])
-		{
-			int client = GetClientOfUserId(iGrenade[GR_userid]);
-			if(!client || !SMRPG_CanRunEffectOnClient(client) || !SMRPG_RunUpgradeEffect(client, UPGRADE_SHORTNAME))
-			{
-				g_hThrownGrenades.Erase(i);
-				break; // Some other plugin doesn't want this effect to run
-			}
-			
-			iGrenade[GR_particle] = EntIndexToEntRef(entity);
-			
-			float fFadeStartTime = GetEntPropFloat(entity, Prop_Send, "m_FadeStartTime");
-			float fFadeEndTime = GetEntPropFloat(entity, Prop_Send, "m_FadeEndTime");
-			
-			// Create the light, which colors the smoke.
-			int iEnt = CreateLightDynamic(entity, fParticleOrigin, iGrenade[GR_team], fFadeStartTime, fFadeEndTime);
-			iGrenade[GR_light] = EntIndexToEntRef(iEnt);
-			
-			// Stop dealing damage when the smoke starts to vanish.
-			iGrenade[GR_removeTimer] = CreateTimer(fFadeStartTime+(fFadeEndTime-fFadeStartTime)/2.5, Timer_StopDamage, iGrenade[GR_particle], TIMER_FLAG_NO_MAPCHANGE);
-			// Deal damage to anyone walking into the smoke
-			iGrenade[GR_damageTimer] = CreateTimer(g_hCVInterval.FloatValue, Timer_CheckDamage, iGrenade[GR_particle], TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
-			
-			g_hThrownGrenades.SetArray(i, iGrenade[0], view_as<int>(GrenadeInfo));
-			
+		// If entity same coordinates some event coordinates
+		if(a[0] == b[0] && a[1] == b[1] && a[2] == b[2])
+		{		
+			checkok = 1;
 			break;
 		}
 	}
-}
+	if (checkok) {
+		int entityRef = EntIndexToEntRef(ent);
+		iGrenade[GR_particle] = entityRef;
+		float fFadeStartTime = GetEntPropFloat(ent, Prop_Send, "m_FadeStartTime");
+		float fFadeEndTime = GetEntPropFloat(ent, Prop_Send, "m_FadeEndTime");
+		
+		// Stop dealing damage when the smoke starts to vanish.
+		iGrenade[GR_removeTimer] = CreateTimer(fFadeStartTime+(fFadeEndTime-fFadeStartTime)/2.5, Timer_StopDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE);
+		// Deal damage to anyone walking into the smoke
+		iGrenade[GR_damageTimer] = CreateTimer(g_hCVInterval.FloatValue, Timer_CheckDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+	}
+	g_hThrownGrenades.PushArray(iGrenade[0], view_as<int>(GrenadeInfo));
 
-// Hide the light if, players disabled the visual effect.
-// Only works, if the light is hidden completely right after spawn and is never transmitted to the client.
-// So you can't toggle the light on and of for a single client while it's already shining.
-public Action Hook_OnSetTransmitLight(int entity, int client)
-{
-	if(client < 0 || client >= MaxClients)
-		return Plugin_Continue;
-	
-	if(IsFakeClient(client) && !IsClientSourceTV(client) && !IsClientReplay(client))
-		return Plugin_Continue;
-	
-	if(!SMRPG_ClientWantsCosmetics(client, UPGRADE_SHORTNAME, SMRPG_FX_Visuals))
-		return Plugin_Stop;
-	
-	return Plugin_Continue;
 }
 
 /**
@@ -280,9 +238,6 @@ public Action Timer_StopDamage(Handle timer, any entityref)
 	for(int i=0; i<iSize; i++)
 	{
 		g_hThrownGrenades.GetArray(i, iGrenade[0], view_as<int>(GrenadeInfo));
-		if(iGrenade[GR_light] == INVALID_ENT_REFERENCE)
-			continue;
-		
 		// This is the right grenade
 		// Remove it
 		if(iGrenade[GR_particle] == entityref)
@@ -348,7 +303,7 @@ public Action Timer_CheckDamage(Handle timer, any entityref)
 		{
 			GetClientAbsOrigin(i, fPlayerOrigin);
 			if(GetVectorDistance(fParticleOrigin, fPlayerOrigin) <= 220)
-				SDKHooks_TakeDamage(i, iGrenade[GR_particle], client, fDamage, DMG_POISON, -1, NULL_VECTOR, fParticleOrigin);
+				SDKHooks_TakeDamage(i, iGrenade[GR_particle], client, fDamage, DMG_DIRECT, -1, NULL_VECTOR, fParticleOrigin);
 		}
 	}
 	
@@ -359,52 +314,6 @@ public Action Timer_CheckDamage(Handle timer, any entityref)
 	g_bInCheckDamage = false;
 	
 	return Plugin_Continue;
-}
-
-int CreateLightDynamic(int entity, float fOrigin[3], int iTeam, float fFadeStartTime, float fFadeEndTime)
-{
-	char sBuffer[64];
-	int iEnt = CreateEntityByName("light_dynamic");
-	if(iEnt == INVALID_ENT_REFERENCE)
-		return iEnt;
-	
-	Format(sBuffer, sizeof(sBuffer), "smokelight_%d", entity);
-	DispatchKeyValue(iEnt,"targetname", sBuffer);
-	Format(sBuffer, sizeof(sBuffer), "%f %f %f", fOrigin[0], fOrigin[1], fOrigin[2]);
-	DispatchKeyValue(iEnt, "origin", sBuffer);
-	DispatchKeyValue(iEnt, "angles", "-90 0 0");
-	if(iTeam == 2)
-		g_hCVColorT.GetString(sBuffer, sizeof(sBuffer));
-	// Fall back to CT color, even if the player switched to spectator after he threw the nade
-	else
-		g_hCVColorCT.GetString(sBuffer, sizeof(sBuffer));
-	DispatchKeyValue(iEnt, "_light", sBuffer);
-	//DispatchKeyValue(iEnt, "_inner_cone","-89");
-	//DispatchKeyValue(iEnt, "_cone","-89");
-	DispatchKeyValue(iEnt, "pitch","-90");
-	DispatchKeyValue(iEnt, "distance","256");
-	DispatchKeyValue(iEnt, "spotlight_radius","96");
-	DispatchKeyValue(iEnt, "brightness","3");
-	DispatchKeyValue(iEnt, "style","6");
-	DispatchKeyValue(iEnt, "spawnflags","1");
-	DispatchSpawn(iEnt);
-	AcceptEntityInput(iEnt, "DisableShadow");
-	
-	char sAddOutput[64];
-	// Remove the light when the smoke vanishes
-	Format(sAddOutput, sizeof(sAddOutput), "OnUser1 !self:kill::%f:1", fFadeStartTime+(fFadeEndTime-fFadeStartTime)/2.5);
-	SetVariantString(sAddOutput);
-	AcceptEntityInput(iEnt, "AddOutput");
-	// Don't light any players or models, when the smoke starts to clear!
-	Format(sAddOutput, sizeof(sAddOutput), "OnUser1 !self:spawnflags:3:%f:1", fFadeStartTime);
-	SetVariantString(sAddOutput);
-	AcceptEntityInput(iEnt, "AddOutput");
-	AcceptEntityInput(iEnt, "FireUser1");
-	
-	// Only show it to people who want to see the visual effect.
-	SDKHook(iEnt, SDKHook_SetTransmit, Hook_OnSetTransmitLight);
-	
-	return iEnt;
 }
 
 stock bool SMRPG_CanRunEffectOnClient(int client)

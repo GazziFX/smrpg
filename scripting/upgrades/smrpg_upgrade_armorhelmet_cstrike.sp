@@ -5,6 +5,7 @@
 
 #pragma semicolon 1
 #include <sourcemod>
+#include <smlib>
 
 #pragma newdecls required
 #include <smrpg>
@@ -12,6 +13,7 @@
 #define UPGRADE_SHORTNAME "armorhelmet"
 
 ConVar g_hCVChance;
+ConVar g_hCVValue;
 
 public Plugin myinfo = 
 {
@@ -60,6 +62,7 @@ public void OnLibraryAdded(const char[] name)
 		SMRPG_SetUpgradeTranslationCallback(UPGRADE_SHORTNAME, SMRPG_TranslateUpgrade);
 		
 		g_hCVChance = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_armorhelmet_chance", "0.1", "Chance percentage of a client spawning with a helmet (multiplied by level).", _, true, 0.01, true, 1.0);
+		g_hCVValue = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_armorhelmet_armor", "50.0", "Armor value when player get lucky chance.", _, true, 1.0, true, 500.0);
 	}
 }
 
@@ -86,9 +89,6 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 	if(!upgrade[UI_enabled])
 		return;
 	
-	// Are bots allowed to use this upgrade?
-	if(IsFakeClient(client) && SMRPG_IgnoreBots())
-		return;
 	
 	// Only change alive players.
 	if(!IsPlayerAlive(client) || IsClientObserver(client))
@@ -105,8 +105,11 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 		return; // Some other plugin doesn't want this effect to run
 	
 	float fChance = float(iLevel) * g_hCVChance.FloatValue;
-	if (GetURandomFloat() < fChance)
+	if (GetURandomFloat() < fChance) {
 		SetEntProp(client, Prop_Send, "m_bHasHelmet", 1);
+		SetEntProp(client, Prop_Send, "m_ArmorValue", g_hCVValue.IntValue);
+		Client_PrintToChatAll(false, "{RB}%N{N} nhân phẩm tốt chạy hiệu ứng {B}%s{N}. Nhận dc {B}%d{N} giáp và mũ đầu", client, UPGRADE_SHORTNAME, g_hCVValue.IntValue);
+	}
 }
  
 /**

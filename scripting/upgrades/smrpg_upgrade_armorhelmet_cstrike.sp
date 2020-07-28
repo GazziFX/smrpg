@@ -108,7 +108,6 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 	if (GetURandomFloat() < fChance) {
 		SetEntProp(client, Prop_Send, "m_bHasHelmet", 1);
 		SetEntProp(client, Prop_Send, "m_ArmorValue", g_hCVValue.IntValue);
-		Client_PrintToChatAll(false, "{RB}%N{N} nhân phẩm tốt chạy hiệu ứng {B}%s{N}. Nhận dc {B}%d{N} giáp và mũ đầu", client, UPGRADE_SHORTNAME, g_hCVValue.IntValue);
 	}
 }
  

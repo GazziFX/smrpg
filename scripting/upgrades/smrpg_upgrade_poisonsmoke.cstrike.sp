@@ -27,6 +27,7 @@ ConVar g_hCVIgnoreFriendlyFire;
 ConVar g_hCVBaseDamage;
 ConVar g_hCVIncDamage;
 ConVar g_hCVInterval;
+ConVar g_hCVDuration;
 
 bool g_bInCheckDamage;
 
@@ -42,9 +43,9 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	EngineVersion engine = GetEngineVersion();
-	if(engine != Engine_CSS)
+	if(engine != Engine_CSS && engine != Engine_CSGO)
 	{
-		Format(error, err_max, "This plugin is for use in Counter-Strike games only. Bad engine version %d.", engine);
+		Format(error, err_max, "This plugin is for use in Counter-Strike games only.");
 		return APLRes_SilentFailure;
 	}
 	return APLRes_Success;
@@ -62,7 +63,7 @@ public void OnPluginStart()
 	HookEvent("round_start", Event_OnResetSmokes);
 	HookEvent("round_end", Event_OnResetSmokes);
 	// Hook events
-	HookEvent("smokegrenade_detonate", smokegrenade_detonate);
+	HookEvent("smokegrenade_detonate", smokegrenade_detonate, EventHookMode_Pre);
 	
 	g_hCVFriendlyFire = FindConVar("mp_friendlyfire");
 }
@@ -96,6 +97,7 @@ public void OnLibraryAdded(const char[] name)
 		g_hCVBaseDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_basedamage", "3", "The minimum damage the poison smoke inflicts.", _, true, 0.0);
 		g_hCVIncDamage = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_incdamage", "2", "How much damage multiplied by the upgrade level should we add to the base damage?", _, true, 1.0);
 		g_hCVInterval = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_damage_interval", "1", "Deal damage every x seconds.", _, true, 0.1);
+		g_hCVDuration = SMRPG_CreateUpgradeConVar(UPGRADE_SHORTNAME, "smrpg_poisonsmoke_duration", "20.0", "Duration of smoke.", _, true, 0.1);
 	}
 }
 
@@ -173,9 +175,9 @@ public void SMRPG_TranslateUpgrade(int client, const char[] shortname, Translati
 // 	}
 // }
 
-public void smokegrenade_detonate(Handle event, const char[] name, bool dontBroadcast)
+public void smokegrenade_detonate(Event event, const char[] name, bool dontBroadcast)
 {
-	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+	int client = GetClientOfUserId(event.GetInt("userid"));
 	if(client == INVALID_ENT_REFERENCE || !IsClientInGame(client))
 		return;
 	
@@ -190,38 +192,22 @@ public void smokegrenade_detonate(Handle event, const char[] name, bool dontBroa
 	iGrenade[GR_damageTimer] = null;
 
 	// Get coordinates of this event
-	float a[3], b[3];
-	a[0] = GetEventFloat(event, "x");
-	a[1] = GetEventFloat(event, "y");
-	a[2] = GetEventFloat(event, "z");
+	float a[3];
+	a[0] = event.GetFloat("x");
+	a[1] = event.GetFloat("y");
+	a[2] = event.GetFloat("z");
 	
-	int checkok = 0;
-	int ent = -1;
+	int ent = event.GetInt("entityid");
+	int entityRef = EntIndexToEntRef(ent);
+	iGrenade[GR_particle] = entityRef;
+	//float fFadeStartTime = GetEntPropFloat(ent, Prop_Send, "m_FadeStartTime");
+	//float fFadeEndTime = GetEntPropFloat(ent, Prop_Send, "m_FadeEndTime");
 	
-	// List all entitys by classname
-	while((ent = FindEntityByClassname(ent, "env_particlesmokegrenade")) != -1)
-	{
-		// Get entity coordinates
-		GetEntPropVector(ent, Prop_Send, "m_vecOrigin", b);
-		
-		// If entity same coordinates some event coordinates
-		if(a[0] == b[0] && a[1] == b[1] && a[2] == b[2])
-		{		
-			checkok = 1;
-			break;
-		}
-	}
-	if (checkok) {
-		int entityRef = EntIndexToEntRef(ent);
-		iGrenade[GR_particle] = entityRef;
-		float fFadeStartTime = GetEntPropFloat(ent, Prop_Send, "m_FadeStartTime");
-		float fFadeEndTime = GetEntPropFloat(ent, Prop_Send, "m_FadeEndTime");
-		
-		// Stop dealing damage when the smoke starts to vanish.
-		iGrenade[GR_removeTimer] = CreateTimer(fFadeStartTime+(fFadeEndTime-fFadeStartTime)/2.5, Timer_StopDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE);
-		// Deal damage to anyone walking into the smoke
-		iGrenade[GR_damageTimer] = CreateTimer(g_hCVInterval.FloatValue, Timer_CheckDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
-	}
+	// Stop dealing damage when the smoke starts to vanish.
+	//iGrenade[GR_removeTimer] = CreateTimer(fFadeStartTime+(fFadeEndTime-fFadeStartTime)/2.5, Timer_StopDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE);
+	iGrenade[GR_removeTimer] = CreateTimer(g_hCVDuration.FloatValue, Timer_StopDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE);
+	// Deal damage to anyone walking into the smoke
+	iGrenade[GR_damageTimer] = CreateTimer(g_hCVInterval.FloatValue, Timer_CheckDamage, entityRef, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 	g_hThrownGrenades.PushArray(iGrenade[0], view_as<int>(GrenadeInfo));
 
 }

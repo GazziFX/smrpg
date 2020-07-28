@@ -134,6 +134,6 @@ public Action Hook_OnTakeDamage(int victim, int &attacker, int &inflictor, float
 		return Plugin_Continue;
 
 	damage = 0.0;
-	Client_PrintToChatAll(false, "{RB}%N{N} nhân phẩm tốt chạy hiệu ứng {B}%s (né){N}", victim, UPGRADE_SHORTNAME);
+	//Client_PrintToChatAll(false, "{RB}%N{N} nhân phẩm tốt chạy hiệu ứng {B}%s (né){N}", victim, UPGRADE_SHORTNAME);
 	return Plugin_Changed;
 }
